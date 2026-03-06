@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Play, Loader2, RotateCcw } from 'lucide-react';
+import { Play, Loader2, RotateCcw, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
@@ -24,12 +24,20 @@ export function SkillExecutor({
   renderResult,
 }: SkillExecutorProps) {
   const [prompt, setPrompt] = useState('');
-  const { execute, isLoading, result, error, reset } = useSkill();
+  const { execute, isLoading, result, error, reset, iteration } = useSkill();
   const user = useUser();
 
   const handleExecute = () => {
     if (!prompt.trim()) return;
     execute(skillId, prompt.trim(), user.id);
+    setPrompt('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleExecute();
+    }
   };
 
   return (
@@ -38,12 +46,17 @@ export function SkillExecutor({
         <Textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder={placeholder || `Descreva o que deseja para o skill ${skillName}...`}
-          rows={4}
+          onKeyDown={handleKeyDown}
+          placeholder={
+            iteration > 0
+              ? 'Peça um ajuste... Ex: "troca o slide 3 por um timeline", "adiciona mais um slide de cases"'
+              : placeholder || `Descreva o que deseja para o skill ${skillName}...`
+          }
+          rows={iteration > 0 ? 2 : 4}
           className="bg-[#121214] border-border focus-visible:ring-primary resize-none"
           disabled={isLoading}
         />
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <Button
             onClick={handleExecute}
             disabled={!prompt.trim() || isLoading}
@@ -51,16 +64,23 @@ export function SkillExecutor({
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : iteration > 0 ? (
+              <Pencil className="w-4 h-4 mr-2" />
             ) : (
               <Play className="w-4 h-4 mr-2" />
             )}
-            {isLoading ? 'Gerando...' : 'Executar'}
+            {isLoading ? 'Gerando...' : iteration > 0 ? 'Refinar' : 'Executar'}
           </Button>
           {result && (
             <Button variant="outline" onClick={reset}>
               <RotateCcw className="w-4 h-4 mr-2" />
-              Nova execução
+              Começar do zero
             </Button>
+          )}
+          {iteration > 0 && (
+            <span className="text-xs text-muted-foreground">
+              Iteração {iteration}
+            </span>
           )}
         </div>
       </div>
