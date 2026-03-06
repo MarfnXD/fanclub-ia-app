@@ -40,10 +40,28 @@ const TOOLBAR_ITEMS: { command: SlideCommand; icon: React.ElementType; label: st
 export function SlidesPreview({ fileUrl, response, onRetheme, isRetheming }: SlidesPreviewProps) {
   const [fullscreen, setFullscreen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const fullUrl = fileUrl.startsWith('http') ? fileUrl : `${API_URL}${fileUrl}`;
 
+  const handleImageSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      iframeRef.current?.contentWindow?.postMessage({ command: 'insertImageData', dataUrl }, '*');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, []);
+
   const sendCommand = useCallback((command: SlideCommand) => {
+    // Insert image: open file picker in parent (avoids iframe user-gesture restriction)
+    if (command === 'insertImage') {
+      imageInputRef.current?.click();
+      return;
+    }
     // These need to open in new tab (fullscreen/print don't work in iframe)
     if (command === 'pdf' || command === 'present') {
       window.open(fullUrl, '_blank');
@@ -156,6 +174,15 @@ export function SlidesPreview({ fileUrl, response, onRetheme, isRetheming }: Sli
             </Tooltip>
           </div>
         </div>
+
+        {/* Hidden file input for image insertion */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleImageSelected}
+        />
 
         {/* Iframe */}
         <Card
