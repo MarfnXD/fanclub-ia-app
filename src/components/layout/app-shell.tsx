@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Menu } from 'lucide-react';
+import type { UserLevel } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Sidebar } from './sidebar';
@@ -19,6 +20,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     deleteConversation,
   } = useConversationsContext();
 
+  const LEVELS: UserLevel[] = ['massa', 'power'];
+  const handleToggleLevel = useCallback(() => {
+    const currentIdx = LEVELS.indexOf(user.level);
+    const next = LEVELS[(currentIdx + 1) % LEVELS.length];
+    user.setLevel(next);
+  }, [user]);
+
   const sidebarProps = {
     conversations,
     activeId,
@@ -26,6 +34,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     onNewChat: createConversation,
     onSelectConversation: selectConversation,
     onDeleteConversation: deleteConversation,
+    onToggleLevel: handleToggleLevel,
   };
 
   return (

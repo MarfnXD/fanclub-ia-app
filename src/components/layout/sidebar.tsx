@@ -18,6 +18,7 @@ interface SidebarProps {
   onNewChat: () => void;
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
+  onToggleLevel?: () => void;
   onClose?: () => void;
 }
 
@@ -33,6 +34,7 @@ export function Sidebar({
   onNewChat,
   onSelectConversation,
   onDeleteConversation,
+  onToggleLevel,
   onClose,
 }: SidebarProps) {
   const pathname = usePathname();
@@ -120,17 +122,26 @@ export function Sidebar({
 
       {/* Footer */}
       <div className="p-4 border-t border-border">
-        <Badge
-          variant="outline"
-          className={cn(
-            'text-xs',
-            userLevel === 'admin' && 'border-cyan text-cyan',
-            userLevel === 'power' && 'border-primary text-primary',
-            userLevel === 'massa' && 'border-muted-foreground text-muted-foreground'
-          )}
+        <button
+          onClick={onToggleLevel}
+          className="flex items-center gap-2 w-full group"
+          title="Alternar nível de acesso"
         >
-          {LEVEL_LABELS[userLevel]}
-        </Badge>
+          <Badge
+            variant="outline"
+            className={cn(
+              'text-xs cursor-pointer transition-colors',
+              userLevel === 'admin' && 'border-cyan text-cyan',
+              userLevel === 'power' && 'border-primary text-primary',
+              userLevel === 'massa' && 'border-muted-foreground text-muted-foreground'
+            )}
+          >
+            {LEVEL_LABELS[userLevel]}
+          </Badge>
+          <span className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+            trocar
+          </span>
+        </button>
       </div>
     </div>
   );
