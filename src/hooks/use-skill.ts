@@ -10,13 +10,19 @@ export function useSkill() {
   const [error, setError] = useState<string | null>(null);
   const [iteration, setIteration] = useState(0);
   const [currentStep, setCurrentStep] = useState<string | null>(null);
+  const [streamingText, setStreamingText] = useState('');
+  const [chatText, setChatText] = useState('');
+  const [contentText, setContentText] = useState('');
   const historyRef = useRef<ConversationMessage[]>([]);
   const accumulatedRef = useRef('');
 
-  const execute = useCallback(async (skill: string, message: string, userId: string) => {
+  const execute = useCallback(async (skill: string, message: string, userId: string, preset?: string, customTokens?: Record<string, unknown> | null) => {
     setIsLoading(true);
     setError(null);
     setCurrentStep(null);
+    setStreamingText('');
+    setChatText('');
+    setContentText('');
     accumulatedRef.current = '';
 
     try {
@@ -28,22 +34,30 @@ export function useSkill() {
           message,
           user_id: userId,
           conversation_history: historyRef.current,
+          preset,
+          custom_tokens: customTokens,
         },
         {
           onChunk: (text) => {
             accumulatedRef.current += text;
-            setResult((prev) => ({
-              response: accumulatedRef.current,
-              model_used: prev?.model_used || '',
-              tokens_used: prev?.tokens_used || { input: 0, output: 0 },
-              file_url: prev?.file_url,
-            }));
+            setStreamingText(accumulatedRef.current);
+          },
+          onChat: (text) => {
+            setChatText(text);
+          },
+          onContent: (text) => {
+            setContentText(text);
           },
           onStep: (step) => {
             setCurrentStep(step);
           },
           onFile: (url) => {
-            setResult((prev) => prev ? { ...prev, file_url: url } : null);
+            setResult((prev) => prev ? { ...prev, file_url: url } : {
+              response: accumulatedRef.current,
+              model_used: '',
+              tokens_used: { input: 0, output: 0 },
+              file_url: url,
+            });
           },
           onDone: (meta) => {
             setCurrentStep(null);
@@ -54,6 +68,7 @@ export function useSkill() {
               file_url: meta.file_url,
             };
             setResult(finalResult);
+            setStreamingText('');
           },
         }
       );
@@ -69,13 +84,14 @@ export function useSkill() {
 
       return finalResult;
     } catch {
-      // Fallback: tenta endpoint não-streaming
       try {
         const res = await api.skill({
           skill,
           message,
           user_id: userId,
           conversation_history: historyRef.current,
+          preset,
+          custom_tokens: customTokens,
         });
 
         historyRef.current = [
@@ -86,9 +102,10 @@ export function useSkill() {
 
         setIteration((n) => n + 1);
         setResult(res);
+        setContentText(res.response);
         return res;
       } catch (fallbackErr) {
-        const msg = fallbackErr instanceof Error ? fallbackErr.message : 'Erro na execução';
+        const msg = fallbackErr instanceof Error ? fallbackErr.message : 'Erro na execucao';
         setError(msg);
         return null;
       }
@@ -98,13 +115,52 @@ export function useSkill() {
     }
   }, []);
 
+  const updateLastResponse = useCallback((newContent: string) => {
+    if (historyRef.current.length >= 2) {
+      historyRef.current[historyRef.current.length - 1] = {
+        role: 'assistant',
+        content: newContent,
+      };
+    }
+  }, []);
+
+  const getConversationHistory = useCallback(() => {
+    return historyRef.current;
+  }, []);
+
+  const restoreState = useCallback((data: {
+    conversationHistory: ConversationMessage[];
+    iteration: number;
+    fileUrl?: string | null;
+    modelUsed?: string | null;
+    response?: string;
+  }) => {
+    historyRef.current = data.conversationHistory;
+    setIteration(data.iteration);
+    if (data.fileUrl) {
+      setResult({
+        response: data.response || '',
+        model_used: data.modelUsed || '',
+        tokens_used: { input: 0, output: 0 },
+        file_url: data.fileUrl,
+      });
+    }
+  }, []);
+
   const reset = useCallback(() => {
     setResult(null);
     setError(null);
     setIteration(0);
     setCurrentStep(null);
+    setStreamingText('');
+    setChatText('');
+    setContentText('');
     historyRef.current = [];
   }, []);
 
-  return { execute, isLoading, result, error, reset, iteration, currentStep };
+  return {
+    execute, isLoading, result, setResult, error, reset, iteration, currentStep,
+    updateLastResponse, streamingText, chatText, contentText,
+    getConversationHistory, restoreState,
+  };
 }
