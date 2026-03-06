@@ -44,9 +44,21 @@ export function SlidesPreview({ fileUrl, response, onRetheme, isRetheming }: Sli
   const fullUrl = fileUrl.startsWith('http') ? fileUrl : `${API_URL}${fileUrl}`;
 
   const sendCommand = useCallback((command: SlideCommand) => {
-    // PDF and Present need to open in new tab (can't work inside iframe sandbox)
+    // These need to open in new tab (fullscreen/print don't work in iframe)
     if (command === 'pdf' || command === 'present') {
       window.open(fullUrl, '_blank');
+      return;
+    }
+    // Save triggers download — also better in new tab
+    if (command === 'save') {
+      window.open(fullUrl, '_blank');
+      return;
+    }
+    // Reset reloads iframe
+    if (command === 'reset') {
+      if (iframeRef.current) {
+        iframeRef.current.src = fullUrl;
+      }
       return;
     }
     iframeRef.current?.contentWindow?.postMessage({ command }, '*');
@@ -157,7 +169,7 @@ export function SlidesPreview({ fileUrl, response, onRetheme, isRetheming }: Sli
             src={fullUrl}
             className="w-full h-full border-0"
             title="Slides Preview"
-            sandbox="allow-scripts allow-same-origin allow-popups"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
           />
         </Card>
 
