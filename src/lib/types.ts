@@ -79,3 +79,18 @@ export interface SkillInfo {
   icon: string;
   route?: string;
 }
+
+export interface SkillOutput {
+  id: string;
+  user_id: string;
+  skill: string;
+  title: string;
+  file_path: string;
+  file_url: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface OutputsResponse {
+  outputs: SkillOutput[];
+}

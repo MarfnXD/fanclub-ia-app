@@ -6,6 +6,7 @@ import type {
   SkillResponse,
   HealthResponse,
   SkillsResponse,
+  OutputsResponse,
 } from './types';
 
 class ApiClient {
@@ -54,6 +55,12 @@ class ApiClient {
 
   async skills(): Promise<SkillsResponse> {
     return this.request<SkillsResponse>('/skills');
+  }
+
+  async outputs(userId: string, skill?: string): Promise<OutputsResponse> {
+    const params = new URLSearchParams({ user_id: userId });
+    if (skill) params.set('skill', skill);
+    return this.request<OutputsResponse>(`/outputs?${params.toString()}`);
   }
 
   fileUrl(filename: string): string {
