@@ -26,6 +26,64 @@ export interface SkillRequest {
   user_id?: string;
   model?: string | null;
   conversation_history?: ConversationMessage[];
+  preset?: string;
+  custom_tokens?: Record<string, unknown> | null;
+}
+
+export interface DesignTokens {
+  colors: {
+    primary: string;
+    'primary-light': string;
+    'primary-lighter': string;
+    'primary-dark': string;
+    'primary-darker': string;
+    'primary-glow': string;
+    'primary-border': string;
+    accent: string;
+    'accent-glow': string;
+  };
+  fonts: {
+    display: string;
+    body: string;
+    mono: string;
+  };
+  radius: {
+    sm: string;
+    md: string;
+    lg: string;
+  };
+  logo_url?: string;
+  background_color?: string;
+}
+
+export interface PresetInfo {
+  id: string;
+  name: string;
+  colors: DesignTokens['colors'];
+  fonts: DesignTokens['fonts'];
+  radius: DesignTokens['radius'];
+  custom?: boolean;
+  db_id?: string;
+  brand_name?: string;
+  personality?: string;
+  logo_url?: string;
+  background_color?: string;
+  pinned?: boolean;
+  sort_order?: number;
+}
+
+export interface PresetsResponse {
+  presets: PresetInfo[];
+}
+
+export interface BrandAnalysis {
+  brand_name: string;
+  colors: DesignTokens['colors'];
+  fonts: DesignTokens['fonts'];
+  style: string;
+  personality: string;
+  font_imports: string;
+  background_color?: string;
 }
 
 export interface SkillResponse {
@@ -93,4 +151,23 @@ export interface SkillOutput {
 
 export interface OutputsResponse {
   outputs: SkillOutput[];
+}
+
+export interface SkillSession {
+  id: string;
+  user_id: string;
+  skill: string;
+  title: string;
+  chat_messages: { role: 'user' | 'assistant'; content: string; timestamp: number }[];
+  conversation_history: ConversationMessage[];
+  file_url: string | null;
+  editor_content: string | null;
+  model_used: string | null;
+  iteration: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessionsResponse {
+  sessions: SkillSession[];
 }

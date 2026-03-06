@@ -7,6 +7,10 @@ import type {
   HealthResponse,
   SkillsResponse,
   OutputsResponse,
+  SkillSession,
+  SessionsResponse,
+  PresetsResponse,
+  BrandAnalysis,
 } from './types';
 
 class ApiClient {
@@ -57,6 +61,82 @@ class ApiClient {
     return this.request<SkillsResponse>('/skills');
   }
 
+  async presets(userId: string = 'anonymous'): Promise<PresetsResponse> {
+    return this.request<PresetsResponse>(`/presets?user_id=${encodeURIComponent(userId)}`);
+  }
+
+  async saveCustomPreset(data: {
+    user_id: string;
+    name: string;
+    colors: Record<string, string>;
+    fonts: Record<string, string>;
+    radius?: Record<string, string>;
+    font_imports?: string;
+    brand_name?: string;
+    personality?: string;
+    logo_url?: string;
+    background_color?: string;
+  }): Promise<{ preset: import('./types').PresetInfo }> {
+    return this.request('/presets/custom', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCustomPreset(dbId: string): Promise<{ ok: boolean }> {
+    return this.request(`/presets/custom/${dbId}`, { method: 'DELETE' });
+  }
+
+  async togglePinPreset(dbId: string): Promise<{ ok: boolean; pinned: boolean }> {
+    return this.request(`/presets/custom/${dbId}/pin`, { method: 'PATCH' });
+  }
+
+  async reorderPresets(presetIds: string[]): Promise<{ ok: boolean }> {
+    return this.request('/presets/custom/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ preset_ids: presetIds }),
+    });
+  }
+
+  async rethemeSlides(data: {
+    file_url: string;
+    preset: string;
+    custom_tokens?: Record<string, unknown> | null;
+  }): Promise<{ file_url: string }> {
+    return this.request('/slides/retheme', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async uploadLogo(file: File): Promise<{ logo_url: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${this.baseUrl}/brand/upload-logo`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(`Logo Upload Error ${res.status}: ${error}`);
+    }
+    return res.json();
+  }
+
+  async analyzeBrand(file: File): Promise<{ tokens: BrandAnalysis }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${this.baseUrl}/brand/analyze`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(`Brand Analysis Error ${res.status}: ${error}`);
+    }
+    return res.json();
+  }
+
   async outputs(userId: string, skill?: string): Promise<OutputsResponse> {
     const params = new URLSearchParams({ user_id: userId });
     if (skill) params.set('skill', skill);
@@ -72,6 +152,8 @@ class ApiClient {
     body: unknown,
     handlers: {
       onText?: (text: string) => void;
+      onChat?: (text: string) => void;
+      onContent?: (text: string) => void;
       onStep?: (step: string) => void;
       onFile?: (url: string) => void;
       onDone?: (meta: { model_used: string; file_url?: string; tokens_used?: { input: number; output: number } }) => void;
@@ -109,6 +191,12 @@ class ApiClient {
             case 'text':
               handlers.onText?.(event.content);
               break;
+            case 'chat':
+              handlers.onChat?.(event.content);
+              break;
+            case 'content':
+              handlers.onContent?.(event.content);
+              break;
             case 'step':
               handlers.onStep?.(event.step);
               break;
@@ -141,10 +229,48 @@ class ApiClient {
     });
   }
 
+  async uploadFile(file: File): Promise<{ filename: string; extension: string; text: string; char_count: number }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${this.baseUrl}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(`Upload Error ${res.status}: ${error}`);
+    }
+    return res.json();
+  }
+
+  // Sessions
+  async saveSession(data: Partial<SkillSession>): Promise<{ session: SkillSession }> {
+    return this.request('/sessions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async listSessions(userId: string, skill?: string): Promise<SessionsResponse> {
+    const params = new URLSearchParams({ user_id: userId });
+    if (skill) params.set('skill', skill);
+    return this.request(`/sessions?${params.toString()}`);
+  }
+
+  async getSession(sessionId: string): Promise<{ session: SkillSession }> {
+    return this.request(`/sessions/${sessionId}`);
+  }
+
+  async deleteSession(sessionId: string): Promise<{ ok: boolean }> {
+    return this.request(`/sessions/${sessionId}`, { method: 'DELETE' });
+  }
+
   async skillStream(
     data: SkillRequest,
     handlers: {
-      onChunk: (text: string) => void;
+      onChunk?: (text: string) => void;
+      onChat?: (text: string) => void;
+      onContent?: (text: string) => void;
       onStep: (step: string) => void;
       onFile: (url: string) => void;
       onDone: (meta: { model_used: string; file_url?: string; tokens_used?: { input: number; output: number } }) => void;
@@ -152,6 +278,8 @@ class ApiClient {
   ) {
     return this.readSSE('/skill/stream', data, {
       onText: handlers.onChunk,
+      onChat: handlers.onChat,
+      onContent: handlers.onContent,
       onStep: handlers.onStep,
       onFile: handlers.onFile,
       onDone: handlers.onDone,
