@@ -6,6 +6,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import { SkillExecutor } from '@/components/skills/skill-executor';
 import { SlidesPreview } from '@/components/skills/slides-preview';
 import { UserProvider } from '@/providers/user-provider';
+import { ConversationsProvider } from '@/providers/conversations-provider';
 import { Button } from '@/components/ui/button';
 
 function SlidesPageContent() {
@@ -50,7 +51,9 @@ function SlidesPageContent() {
 export default function SlidesPage() {
   return (
     <UserProvider>
-      <SlidesPageContent />
+      <ConversationsProvider>
+        <SlidesPageContent />
+      </ConversationsProvider>
     </UserProvider>
   );
 }

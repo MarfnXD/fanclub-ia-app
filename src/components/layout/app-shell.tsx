@@ -5,7 +5,7 @@ import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Sidebar } from './sidebar';
-import { useConversations } from '@/hooks/use-conversations';
+import { useConversationsContext } from '@/providers/conversations-provider';
 import { useUser } from '@/providers/user-provider';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -17,7 +17,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     createConversation,
     selectConversation,
     deleteConversation,
-  } = useConversations();
+  } = useConversationsContext();
 
   const sidebarProps = {
     conversations,

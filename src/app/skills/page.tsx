@@ -3,6 +3,7 @@
 import { AppShell } from '@/components/layout/app-shell';
 import { SkillCard } from '@/components/skills/skill-card';
 import { UserProvider, useUser } from '@/providers/user-provider';
+import { ConversationsProvider } from '@/providers/conversations-provider';
 import { SKILLS } from '@/lib/constants';
 import { Sparkles } from 'lucide-react';
 
@@ -47,7 +48,9 @@ function SkillsPageContent() {
 export default function SkillsPage() {
   return (
     <UserProvider>
-      <SkillsPageContent />
+      <ConversationsProvider>
+        <SkillsPageContent />
+      </ConversationsProvider>
     </UserProvider>
   );
 }

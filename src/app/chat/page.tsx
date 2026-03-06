@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { AppShell } from '@/components/layout/app-shell';
 import { ChatContainer } from '@/components/chat/chat-container';
 import { UserProvider, useUser } from '@/providers/user-provider';
-import { useConversations } from '@/hooks/use-conversations';
+import { ConversationsProvider, useConversationsContext } from '@/providers/conversations-provider';
 import { useChat } from '@/hooks/use-chat';
 
 function ChatPageContent() {
@@ -14,7 +14,7 @@ function ChatPageContent() {
     createConversation,
     addMessage,
     updateLastMessage,
-  } = useConversations();
+  } = useConversationsContext();
 
   const { sendMessage, isLoading } = useChat({
     userId: user.id,
@@ -49,7 +49,9 @@ function ChatPageContent() {
 export default function ChatPage() {
   return (
     <UserProvider>
-      <ChatPageContent />
+      <ConversationsProvider>
+        <ChatPageContent />
+      </ConversationsProvider>
     </UserProvider>
   );
 }
