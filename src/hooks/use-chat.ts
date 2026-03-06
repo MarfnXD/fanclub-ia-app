@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { v4 as uuid } from 'uuid';
 import { api } from '@/lib/api';
 import type { Message, UserLevel, ConversationMessage } from '@/lib/types';
@@ -14,6 +14,7 @@ interface UseChatOptions {
 
 export function useChat({ userId, level, onAddMessage, onUpdateLastMessage }: UseChatOptions) {
   const [isLoading, setIsLoading] = useState(false);
+  const accumulatedRef = useRef('');
 
   const sendMessage = useCallback(
     async (conversationId: string, content: string, history: Message[]) => {
@@ -34,6 +35,8 @@ export function useChat({ userId, level, onAddMessage, onUpdateLastMessage }: Us
       onAddMessage(conversationId, placeholderMsg);
 
       setIsLoading(true);
+      accumulatedRef.current = '';
+
       try {
         const conversationHistory: ConversationMessage[] = history.map((m) => ({
           role: m.role,
@@ -41,26 +44,59 @@ export function useChat({ userId, level, onAddMessage, onUpdateLastMessage }: Us
         }));
         conversationHistory.push({ role: 'user', content });
 
-        const res = await api.chat({
+        const requestData = {
           message: content,
           user_id: userId,
           level,
           conversation_history: conversationHistory,
-        });
+        };
 
-        const assistantMsg: Message = {
-          ...placeholderMsg,
-          content: res.response,
-          model_used: res.model_used,
-          tokens_used: res.tokens_used,
-        };
-        onUpdateLastMessage(conversationId, assistantMsg);
-      } catch (err) {
-        const errorMsg: Message = {
-          ...placeholderMsg,
-          content: `Erro: ${err instanceof Error ? err.message : 'Falha na comunicação'}`,
-        };
-        onUpdateLastMessage(conversationId, errorMsg);
+        await api.chatStream(
+          requestData,
+          (chunk) => {
+            accumulatedRef.current += chunk;
+            onUpdateLastMessage(conversationId, {
+              ...placeholderMsg,
+              content: accumulatedRef.current,
+            });
+          },
+          (meta) => {
+            onUpdateLastMessage(conversationId, {
+              ...placeholderMsg,
+              content: accumulatedRef.current,
+              model_used: meta.model_used,
+              tokens_used: meta.tokens_used,
+            });
+          }
+        );
+      } catch {
+        // Fallback: tenta endpoint não-streaming
+        try {
+          const conversationHistory: ConversationMessage[] = history.map((m) => ({
+            role: m.role,
+            content: m.content,
+          }));
+          conversationHistory.push({ role: 'user', content });
+
+          const res = await api.chat({
+            message: content,
+            user_id: userId,
+            level,
+            conversation_history: conversationHistory,
+          });
+
+          onUpdateLastMessage(conversationId, {
+            ...placeholderMsg,
+            content: res.response,
+            model_used: res.model_used,
+            tokens_used: res.tokens_used,
+          });
+        } catch (fallbackErr) {
+          onUpdateLastMessage(conversationId, {
+            ...placeholderMsg,
+            content: `Erro: ${fallbackErr instanceof Error ? fallbackErr.message : 'Falha na comunicação'}`,
+          });
+        }
       } finally {
         setIsLoading(false);
       }

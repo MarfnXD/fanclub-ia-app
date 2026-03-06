@@ -24,7 +24,7 @@ export function SkillExecutor({
   renderResult,
 }: SkillExecutorProps) {
   const [prompt, setPrompt] = useState('');
-  const { execute, isLoading, result, error, reset, iteration } = useSkill();
+  const { execute, isLoading, result, error, reset, iteration, currentStep } = useSkill();
   const user = useUser();
 
   const handleExecute = () => {
@@ -84,6 +84,13 @@ export function SkillExecutor({
           )}
         </div>
       </div>
+
+      {isLoading && currentStep && (
+        <div className="flex items-center gap-2 text-sm text-primary animate-pulse">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>{currentStep}</span>
+        </div>
+      )}
 
       {error && (
         <Card className="bg-destructive/10 border-destructive/30 p-4">
