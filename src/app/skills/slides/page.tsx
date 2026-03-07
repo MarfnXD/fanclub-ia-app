@@ -612,31 +612,13 @@ function SlidesWorkspace() {
               <Loader2 className="w-6 h-6 text-primary animate-spin" />
             </div>
           ) : showPlanEditor ? (
-            <div className="h-full flex flex-col">
-              <SlidePlanEditor
-                plan={plan!}
-                pipelineStep={pipelineStep as 1 | 2}
-                onChange={setPlan}
-              />
-              {/* Approve button */}
-              <div className="px-4 py-3 border-t border-border flex items-center justify-between bg-[#0A0A0B]">
-                <div className="text-[10px] text-muted-foreground">
-                  {pipelineStep === 1
-                    ? 'Step 1/3 — Revise o plano e aprove para definir componentes visuais'
-                    : 'Step 2/3 — Componentes definidos. Aprove para gerar o HTML'}
-                </div>
-                <Button
-                  onClick={handleApproveStep}
-                  disabled={pipelineLoading}
-                  className="gap-1.5 bg-primary hover:bg-primary/90 text-sm h-8"
-                >
-                  {pipelineLoading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : null}
-                  {pipelineStep === 1 ? 'Aprovar plano' : 'Gerar slides'}
-                </Button>
-              </div>
-            </div>
+            <SlidePlanEditor
+              plan={plan!}
+              pipelineStep={pipelineStep as 1 | 2}
+              isLoading={pipelineLoading}
+              onChange={setPlan}
+              onApprove={handleApproveStep}
+            />
           ) : showSessionsList ? (
             <div className="h-full overflow-auto px-6 py-8">
               {(sessions.length > 0 || outputs.length > 0) ? (
