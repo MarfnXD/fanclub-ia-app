@@ -171,3 +171,54 @@ export interface SkillSession {
 export interface SessionsResponse {
   sessions: SkillSession[];
 }
+
+// Pipeline Multi-Step (Slides)
+export interface SlidesPlanSlide {
+  number: number;
+  type: 'cover' | 'content' | 'section_break' | 'end';
+  label: string | null;
+  title: string;
+  subtitle: string | null;
+  content: string[];
+  content_type: string;
+  notes: string;
+  // Step 2 fields
+  component?: string | null;
+  secondary_component?: string | null;
+  icons?: string[];
+  chart?: { type: string; description: string; data_from_content?: boolean } | null;
+  design_notes?: string | null;
+  layout_hint?: string | null;
+}
+
+export interface SlidesPlanMeta {
+  title: string;
+  subtitle: string;
+  badge: string;
+  total_slides: number;
+  curation_mode: boolean;
+  curation_notes?: string;
+}
+
+export interface SlidesPlan {
+  meta: SlidesPlanMeta;
+  slides: SlidesPlanSlide[];
+}
+
+export interface SlidesStepRequest {
+  step: 1 | 2 | 3;
+  message?: string;
+  plan_json?: SlidesPlan;
+  curation_mode?: boolean;
+  user_id?: string;
+  model?: string | null;
+  preset?: string;
+  custom_tokens?: Record<string, unknown> | null;
+}
+
+export interface SlidesStepResponse {
+  step: number;
+  plan: SlidesPlan;
+  model_used: string;
+  tokens_used: { input: number; output: number };
+}

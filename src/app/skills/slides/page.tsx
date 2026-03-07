@@ -3,11 +3,13 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   PanelRightClose, PanelRightOpen, FileText, Plus, Trash2, Clock, ExternalLink, Loader2,
+  Sparkles, Shield,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
 import { SkillChat } from '@/components/skills/skill-chat';
 import { SkillContent } from '@/components/skills/skill-content';
 import { SlidesPreview } from '@/components/skills/slides-preview';
+import { SlidePlanEditor } from '@/components/skills/slide-plan-editor';
 import { ThemeEditor } from '@/components/skills/theme-editor';
 import { UserProvider } from '@/providers/user-provider';
 import { ConversationsProvider } from '@/providers/conversations-provider';
@@ -17,7 +19,7 @@ import { useUser } from '@/providers/user-provider';
 import { api } from '@/lib/api';
 import { API_URL } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import type { SkillSession, SkillOutput, PresetInfo, DesignTokens } from '@/lib/types';
+import type { SkillSession, SkillOutput, PresetInfo, DesignTokens, SlidesPlan } from '@/lib/types';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -53,6 +55,19 @@ function SlidesWorkspace() {
   const [presets, setPresets] = useState<PresetInfo[]>([]);
   const [selectedPreset, setSelectedPreset] = useState('default');
   const [customTokens, setCustomTokens] = useState<Partial<DesignTokens> | null>(null);
+
+  // Pipeline multi-step
+  const [curationMode, setCurationMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('slides-curation-mode');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
+  const [pipelineStep, setPipelineStep] = useState<0 | 1 | 2 | 3>(0); // 0=idle, 1=plan ready, 2=components ready, 3=generating HTML
+  const [plan, setPlan] = useState<SlidesPlan | null>(null);
+  const [pipelineLoading, setPipelineLoading] = useState(false);
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
 
   // Session management
   const [sessionId, setSessionId] = useState<string | null>(() => {
@@ -186,22 +201,218 @@ function SlidesWorkspace() {
     }
   };
 
-  const handleExecute = useCallback((message: string) => {
+  const handleExecute = useCallback(async (message: string) => {
+    const displayMsg = message.length > 500 ? message.slice(0, 200) + '...' : message;
     setChatMessages(prev => [...prev, {
       role: 'user' as const,
-      content: message.length > 500 ? message.slice(0, 200) + '...' : message,
+      content: displayMsg,
       timestamp: Date.now(),
     }]);
+
+    // Pipeline: step 1 — architecture
+    if (pipelineStep === 0) {
+      setPipelineLoading(true);
+      setPipelineError(null);
+      setChatMessages(prev => [...prev, {
+        role: 'assistant' as const,
+        content: '',
+        timestamp: Date.now(),
+      }]);
+
+      try {
+        const model = null; // default (Sonnet)
+        const res = await api.slidesStep({
+          step: 1,
+          message,
+          curation_mode: curationMode,
+          user_id: user.id,
+          model,
+          preset: selectedPreset,
+          custom_tokens: customTokens as Record<string, unknown> | null,
+        });
+
+        setPlan(res.plan);
+        setPipelineStep(1);
+        const slideCount = res.plan?.slides?.length || 0;
+        const modelLabel = res.model_used || 'Sonnet';
+        setChatMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: 'assistant',
+            content: `Plano com ${slideCount} slides pronto (${modelLabel}). Edite no painel central — titulos, textos, ordem. Quando estiver ok, clique "Aprovar".`,
+            timestamp: Date.now(),
+          };
+          return updated;
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erro no step 1';
+        setPipelineError(msg);
+        setChatMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: 'assistant',
+            content: `Erro ao gerar plano: ${msg}`,
+            timestamp: Date.now(),
+          };
+          return updated;
+        });
+      } finally {
+        setPipelineLoading(false);
+      }
+      return;
+    }
+
+    // If already in pipeline, treat as adjustment request — re-run step 1 with context
+    if (pipelineStep === 1 || pipelineStep === 2) {
+      setPipelineLoading(true);
+      setPipelineError(null);
+      setChatMessages(prev => [...prev, {
+        role: 'assistant' as const,
+        content: '',
+        timestamp: Date.now(),
+      }]);
+
+      try {
+        const adjustMessage = plan
+          ? `O usuario quer ajustar o plano. Plano atual:\n\`\`\`json\n${JSON.stringify(plan, null, 2)}\n\`\`\`\n\nPedido do usuario: ${message}\n\nRetorne o JSON atualizado completo.`
+          : message;
+
+        const res = await api.slidesStep({
+          step: 1,
+          message: adjustMessage,
+          curation_mode: curationMode,
+          user_id: user.id,
+          preset: selectedPreset,
+          custom_tokens: customTokens as Record<string, unknown> | null,
+        });
+
+        setPlan(res.plan);
+        setPipelineStep(1);
+        setChatMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: 'assistant',
+            content: `Plano atualizado (${res.plan?.slides?.length || 0} slides). Revise e aprove.`,
+            timestamp: Date.now(),
+          };
+          return updated;
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erro ao ajustar';
+        setPipelineError(msg);
+      } finally {
+        setPipelineLoading(false);
+      }
+      return;
+    }
+  }, [pipelineStep, curationMode, user.id, selectedPreset, customTokens, plan]);
+
+  const handleApproveStep = useCallback(async () => {
+    if (!plan) return;
+    setPipelineLoading(true);
+    setPipelineError(null);
+
     setChatMessages(prev => [...prev, {
       role: 'assistant' as const,
       content: '',
       timestamp: Date.now(),
     }]);
 
-    execute('slides', message, user.id, selectedPreset, customTokens as Record<string, unknown> | null);
-    setContentEdited(false);
-    setEditMode(false);
-  }, [execute, user.id, selectedPreset, customTokens]);
+    try {
+      if (pipelineStep === 1) {
+        // Step 2: component design
+        const res = await api.slidesStep({
+          step: 2,
+          plan_json: plan,
+          curation_mode: curationMode,
+          user_id: user.id,
+          preset: selectedPreset,
+          custom_tokens: customTokens as Record<string, unknown> | null,
+        });
+
+        setPlan(res.plan);
+        setPipelineStep(2);
+        setChatMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: 'assistant',
+            content: `Componentes visuais definidos (${res.model_used}). Revise os componentes escolhidos e aprove para gerar o HTML.`,
+            timestamp: Date.now(),
+          };
+          return updated;
+        });
+      } else if (pipelineStep === 2) {
+        // Step 3: HTML generation (streaming)
+        setPipelineStep(3);
+        setChatMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: 'assistant',
+            content: 'Gerando HTML dos slides...',
+            timestamp: Date.now(),
+          };
+          return updated;
+        });
+
+        await api.slidesStepStream(
+          {
+            step: 3,
+            plan_json: plan,
+            curation_mode: curationMode,
+            user_id: user.id,
+            preset: selectedPreset,
+            custom_tokens: customTokens as Record<string, unknown> | null,
+          },
+          {
+            onStep: (step) => setCurrentStepLabel(step),
+            onFile: (url) => {
+              setResult({
+                response: '',
+                model_used: '',
+                tokens_used: { input: 0, output: 0 },
+                file_url: url,
+              });
+            },
+            onDone: (meta) => {
+              setCurrentStepLabel(null);
+              setResult({
+                response: '',
+                model_used: meta.model_used,
+                tokens_used: meta.tokens_used || { input: 0, output: 0 },
+                file_url: meta.file_url,
+              });
+              setChatMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  role: 'assistant',
+                  content: `Slides gerados! (${meta.model_used}). Veja o preview no painel central.`,
+                  timestamp: Date.now(),
+                };
+                return updated;
+              });
+            },
+          }
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro no pipeline';
+      setPipelineError(msg);
+      setChatMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: 'assistant',
+          content: `Erro: ${msg}`,
+          timestamp: Date.now(),
+        };
+        return updated;
+      });
+    } finally {
+      setPipelineLoading(false);
+    }
+  }, [plan, pipelineStep, curationMode, user.id, selectedPreset, customTokens]);
+
+  // Label for step 3 streaming progress
+  const [currentStepLabel, setCurrentStepLabel] = useState<string | null>(null);
 
   const handleReset = () => {
     reset();
@@ -211,6 +422,11 @@ function SlidesWorkspace() {
     setChatMessages([]);
     lastContentRef.current = '';
     setSessionId(null);
+    setPipelineStep(0);
+    setPlan(null);
+    setPipelineError(null);
+    setPipelineLoading(false);
+    setCurrentStepLabel(null);
     localStorage.removeItem('slides-active-session');
   };
 
@@ -296,7 +512,10 @@ function SlidesWorkspace() {
   }, [result, selectedPreset, customTokens, setResult]);
 
   // Show sessions list when no active work and data is loaded
-  const showSessionsList = !initialLoading && !result && !isLoading && chatMessages.length === 0;
+  const showSessionsList = !initialLoading && !result && !isLoading && !pipelineLoading && chatMessages.length === 0 && pipelineStep === 0;
+  const showPlanEditor = plan && (pipelineStep === 1 || pipelineStep === 2) && !result?.file_url;
+  const effectiveLoading = isLoading || pipelineLoading;
+  const effectiveStep = currentStepLabel || currentStep;
 
   return (
     <div className="flex h-full">
@@ -311,7 +530,23 @@ function SlidesWorkspace() {
                 {result.model_used}
               </span>
             )}
-            {sessionId && (
+            {pipelineStep > 0 && (
+              <div className="flex items-center gap-1">
+                {[1, 2, 3].map((s) => (
+                  <div
+                    key={s}
+                    className={cn(
+                      'w-1.5 h-1.5 rounded-full transition-colors',
+                      s <= pipelineStep ? 'bg-primary' : 'bg-border'
+                    )}
+                  />
+                ))}
+                <span className="text-[10px] text-muted-foreground ml-1">
+                  {pipelineStep === 1 ? 'Plano' : pipelineStep === 2 ? 'Componentes' : 'HTML'}
+                </span>
+              </div>
+            )}
+            {(sessionId || pipelineStep > 0) && (
               <Button
                 variant="ghost" size="sm"
                 className="h-6 text-[10px] text-muted-foreground hover:text-white gap-1"
@@ -322,19 +557,39 @@ function SlidesWorkspace() {
               </Button>
             )}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => {
-              const next = !chatOpen;
-              setChatOpen(next);
-              localStorage.setItem('slides-chat-open', String(next));
-            }}
-            title={chatOpen ? 'Fechar chat' : 'Abrir chat'}
-          >
-            {chatOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Curation toggle */}
+            <button
+              onClick={() => {
+                const next = !curationMode;
+                setCurationMode(next);
+                localStorage.setItem('slides-curation-mode', String(next));
+              }}
+              className={cn(
+                'flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium transition-colors border',
+                curationMode
+                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+              )}
+              title={curationMode ? 'Curadoria ON: IA pode reestruturar conteudo' : 'Curadoria OFF: IA preserva seu texto exato'}
+            >
+              {curationMode ? <Sparkles className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
+              {curationMode ? 'Curadoria' : 'Preservar'}
+            </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => {
+                const next = !chatOpen;
+                setChatOpen(next);
+                localStorage.setItem('slides-chat-open', String(next));
+              }}
+              title={chatOpen ? 'Fechar chat' : 'Abrir chat'}
+            >
+              {chatOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
+            </Button>
+          </div>
         </div>
 
         {/* Theme Editor */}
@@ -355,6 +610,32 @@ function SlidesWorkspace() {
           {initialLoading ? (
             <div className="h-full flex items-center justify-center">
               <Loader2 className="w-6 h-6 text-primary animate-spin" />
+            </div>
+          ) : showPlanEditor ? (
+            <div className="h-full flex flex-col">
+              <SlidePlanEditor
+                plan={plan!}
+                pipelineStep={pipelineStep as 1 | 2}
+                onChange={setPlan}
+              />
+              {/* Approve button */}
+              <div className="px-4 py-3 border-t border-border flex items-center justify-between bg-[#0A0A0B]">
+                <div className="text-[10px] text-muted-foreground">
+                  {pipelineStep === 1
+                    ? 'Step 1/3 — Revise o plano e aprove para definir componentes visuais'
+                    : 'Step 2/3 — Componentes definidos. Aprove para gerar o HTML'}
+                </div>
+                <Button
+                  onClick={handleApproveStep}
+                  disabled={pipelineLoading}
+                  className="gap-1.5 bg-primary hover:bg-primary/90 text-sm h-8"
+                >
+                  {pipelineLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : null}
+                  {pipelineStep === 1 ? 'Aprovar plano' : 'Gerar slides'}
+                </Button>
+              </div>
             </div>
           ) : showSessionsList ? (
             <div className="h-full overflow-auto px-6 py-8">
@@ -485,10 +766,13 @@ function SlidesWorkspace() {
         {chatOpen && (
           <SkillChat
             skillName="Slides"
-            placeholder='Ex: "Apresentacao sobre o projeto X com 8 slides..."'
-            isLoading={isLoading}
-            currentStep={currentStep}
-            error={error}
+            placeholder={pipelineStep > 0
+              ? 'Peca ajustes no plano...'
+              : 'Cole o conteudo da sua apresentacao...'
+            }
+            isLoading={effectiveLoading}
+            currentStep={effectiveStep}
+            error={pipelineError || error}
             iteration={iteration}
             messages={chatMessages}
             streamingText={streamingText}

@@ -11,6 +11,8 @@ import type {
   SessionsResponse,
   PresetsResponse,
   BrandAnalysis,
+  SlidesStepRequest,
+  SlidesStepResponse,
 } from './types';
 
 class ApiClient {
@@ -263,6 +265,32 @@ class ApiClient {
 
   async deleteSession(sessionId: string): Promise<{ ok: boolean }> {
     return this.request(`/sessions/${sessionId}`, { method: 'DELETE' });
+  }
+
+  // Pipeline multi-step para slides
+  async slidesStep(data: SlidesStepRequest): Promise<SlidesStepResponse> {
+    return this.request<SlidesStepResponse>('/skill/slides/step', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async slidesStepStream(
+    data: SlidesStepRequest,
+    handlers: {
+      onChunk?: (text: string) => void;
+      onStep?: (step: string) => void;
+      onFile?: (url: string) => void;
+      onDone?: (meta: { model_used: string; file_url?: string; tokens_used?: { input: number; output: number } }) => void;
+    }
+  ) {
+    return this.readSSE('/skill/slides/step', data, {
+      onText: handlers.onChunk,
+      onStep: handlers.onStep,
+      onFile: handlers.onFile,
+      onDone: handlers.onDone,
+      onError: (msg) => { throw new Error(msg); },
+    });
   }
 
   async skillStream(
