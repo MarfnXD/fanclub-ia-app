@@ -301,9 +301,9 @@ export function SlidePlanEditor({ plan, pipelineStep, isLoading, onChange, onApp
   }, [plan, onChange]);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border">
+      <div className="px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold text-white">{plan.meta.title}</h2>
@@ -329,7 +329,7 @@ export function SlidePlanEditor({ plan, pipelineStep, isLoading, onChange, onApp
       </div>
 
       {/* Slides list */}
-      <div className="flex-1 overflow-auto px-4 py-3 space-y-2">
+      <div className="flex-1 overflow-auto min-h-0 px-4 py-3 space-y-2">
         {plan.slides.map((slide, index) => (
           <SlideCard
             key={`${slide.number}-${index}`}
@@ -346,7 +346,7 @@ export function SlidePlanEditor({ plan, pipelineStep, isLoading, onChange, onApp
       </div>
 
       {/* Footer actions */}
-      <div className="px-4 py-3 border-t border-border bg-[#0A0A0B]">
+      <div className="px-4 py-3 border-t border-border bg-[#0A0A0B] shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
